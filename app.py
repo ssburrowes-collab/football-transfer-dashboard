@@ -109,9 +109,9 @@ with tab1:
 
     # Construct the input array
     input_data = pd.DataFrame([[
-        age, market_val, goals_90, assists_90, xg_90, xa_90, contract_years, is_jan,
-        pos_def, pos_gk, pos_mid, pos_unk,
-        log_vol, hype_prob, mkt_neg, perf_pos, perf_neg, std_hype, get_val('std_perf_neg_prob', 0.1)
+    age, market_val, goals_90, assists_90, xg_90, xa_90, contract_years, is_jan,
+    pos_def, pos_gk, pos_mid,
+    log_vol, hype_prob, mkt_neg, perf_pos, perf_neg, std_hype, get_val('std_perf_neg_prob', 0.1)
     ]], columns=all_features)
 
     for c in input_data.columns:
