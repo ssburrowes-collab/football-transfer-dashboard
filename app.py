@@ -32,7 +32,7 @@ demo_df = load_demo_data()
 base_features = [
     'age_at_transfer', 'market_value_adj', 'goals_per_90', 'assists_per_90', 
     'sb_xg_per_90', 'sb_xa_per_90', 'contract_years_remaining', 'is_january_window',
-    'position_Defender', 'position_Goalkeeper', 'position_Midfield', 'position_Unknown'
+    'position_Defender', 'position_Goalkeeper', 'position_Midfield'
 ]
 nlp_features = [
     'log_reddit_volume', 'avg_hype_prob', 'avg_mkt_neg_prob', 
