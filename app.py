@@ -4,16 +4,18 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")  # required on Streamlit Cloud (headless)
 import matplotlib.pyplot as plt
+from matplotlib import colors as mcolors
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 import shap
 import streamlit as st
 import streamlit.components.v1 as components
 import xgboost as xgb
 
 # ------------------------------------------------------------------
-# 0. PATHS & CONSTANTS
+# 0. PATHS, CONSTANTS, GLOBAL STYLE
 # ------------------------------------------------------------------
 ROOT = Path(__file__).parent
 MODELS = ROOT / "models"
@@ -23,6 +25,77 @@ WINDOW_DAYS = 60
 st.set_page_config(page_title="Transfer Value Lab", page_icon="⚽",
                    layout="wide", initial_sidebar_state="expanded")
 
+pio.templates.default = "plotly_dark"
+
+plt.rcParams.update({
+    "figure.facecolor": "#0e1117", "axes.facecolor": "#0e1117",
+    "savefig.facecolor": "#0e1117", "text.color": "#e6edf3",
+    "axes.labelcolor": "#e6edf3", "xtick.color": "#9aa4b2",
+    "ytick.color": "#9aa4b2", "axes.edgecolor": "#39414d",
+})
+
+BG = "rgba(0,0,0,0)"          # transparent plot backgrounds
+GRID = "rgba(148,163,184,0.10)"
+POS, NEG = "#34d399", "#f87171"
+HYPE, PRAISE, CRIT = "#f5b942", "#34d399", "#f87171"
+VIOLET = "#8b5cf6"
+
+st.markdown("""
+<style>
+/* ---------- hero ---------- */
+.hero{padding:1.3rem 1.6rem;border-radius:16px;color:#fff;margin-bottom:1.2rem;
+background:linear-gradient(115deg,#0b3d2e 0%,#0f2027 45%,#203a43 75%,#2c5364 100%);
+border:1px solid rgba(255,255,255,.08);}
+.hero h1{margin:0;font-size:1.9rem;letter-spacing:.01em}
+.hero p{margin:.3rem 0 .6rem;opacity:.85;font-size:.95rem}
+.chips span{display:inline-block;background:rgba(255,255,255,.09);
+border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:3px 12px;
+font-size:.75rem;margin:0 6px 6px 0;color:#dbe7f3}
+
+/* ---------- player header card ---------- */
+.player-card{display:flex;align-items:center;gap:18px;background:#161b22;
+border:1px solid #232a35;border-radius:16px;padding:16px 20px;margin-bottom:14px}
+.player-img{width:92px;height:92px;object-fit:cover;border-radius:12px;
+border:1px solid #2c3542;background:#0e1117}
+.player-avatar{width:92px;height:92px;border-radius:12px;background:#1f2733;
+display:flex;align-items:center;justify-content:center;font-size:2.2rem}
+.player-name{font-size:1.35rem;font-weight:700;color:#f1f5f9}
+.player-meta{font-size:.85rem;color:#8b94a3;margin-top:2px}
+.badge{display:inline-block;background:#1f2733;border:1px solid #2c3542;
+border-radius:999px;padding:2px 10px;font-size:.72rem;color:#aeb8c6;margin:6px 8px 0 0}
+.badge.future{background:rgba(139,92,246,.14);border-color:rgba(139,92,246,.5);color:#c4b5fd}
+.tm-btn{margin-left:auto;text-decoration:none;background:#1f2733;color:#dbe7f3;
+border:1px solid #2c3542;border-radius:10px;padding:8px 14px;font-size:.8rem;white-space:nowrap}
+.tm-btn:hover{background:#27313f;color:#fff}
+
+/* ---------- KPI cards ---------- */
+.kpi-grid{display:flex;gap:14px;margin-bottom:6px}
+.kpi-card{flex:1;background:#161b22;border:1px solid #232a35;border-radius:14px;
+padding:14px 18px;border-top:3px solid var(--accent,#2ecc71)}
+.kpi-title{font-size:.72rem;color:#8b94a3;text-transform:uppercase;letter-spacing:.07em}
+.kpi-value{font-size:1.65rem;font-weight:700;color:#f1f5f9;margin-top:3px}
+.kpi-sub{font-size:.78rem;color:#8b94a3;margin-top:2px}
+
+/* ---------- section polish ---------- */
+.section-h{font-size:1.15rem;font-weight:650;color:#e6edf3;margin:1.1rem 0 .4rem}
+.muted{color:#8b94a3;font-size:.82rem}
+hr{border-color:#232a35}
+
+/* ---------- tabs ---------- */
+.stTabs [data-baseweb="tab-list"]{gap:6px}
+.stTabs [data-baseweb="tab"]{background:#161b22;border:1px solid #232a35;
+border-radius:10px 10px 0 0;padding:8px 18px}
+.stTabs [aria-selected="true"]{background:#1f2733;border-bottom:2px solid #2ecc71}
+
+/* ---------- footer ---------- */
+.footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid #232a35;
+color:#6b7484;font-size:.78rem;text-align:center}
+</style>
+""", unsafe_allow_html=True)
+
+# ------------------------------------------------------------------
+# 1. FEATURE METADATA
+# ------------------------------------------------------------------
 ALL_FEATURES = json.load(open(MODELS / f"feature_list_{WINDOW_DAYS}d.json"))
 POSITION_COLS = [c for c in ALL_FEATURES if c.startswith("position_")]
 NLP_FEATURES = [c for c in ALL_FEATURES if c in {
@@ -70,8 +143,42 @@ GROUPS = {
 def eur(x):
     return f"€{x/1e6:,.1f}M" if abs(x) >= 1e6 else f"€{x/1e3:,.0f}k"
 
+def style_dark(fig, height=None, legend_top=True):
+    """Apply consistent dark styling to a Plotly figure."""
+    lay = dict(paper_bgcolor=BG, plot_bgcolor=BG, font=dict(color="#e6edf3"),
+               margin=dict(l=10, r=10, t=36 if legend_top else 10, b=10),
+               hovermode="x unified")
+    if height:
+        lay["height"] = height
+    if legend_top:
+        lay["legend"] = dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                             bgcolor="rgba(0,0,0,0)", font=dict(size=11))
+    fig.update_layout(**lay)
+    fig.update_xaxes(gridcolor="rgba(0,0,0,0)", zerolinecolor="rgba(0,0,0,0)")
+    fig.update_yaxes(gridcolor=GRID, zerolinecolor="rgba(0,0,0,0)")
+    return fig
+
+def restyle_mpl_dark(fig):
+    """Recolor a matplotlib (SHAP) figure for the dark theme."""
+    fig.patch.set_facecolor("#0e1117")
+    for ax in fig.axes:
+        ax.set_facecolor("#0e1117")
+        ax.tick_params(colors="#9aa4b2")
+        for s in ax.spines.values():
+            s.set_color("#39414d")
+        for item in (ax.title, ax.xaxis.label, ax.yaxis.label):
+            item.set_color("#e6edf3")
+        for t in ax.texts:
+            try:
+                r, g, b = mcolors.to_rgb(t.get_color())
+                if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.25:  # near-black → light
+                    t.set_color("#e6edf3")
+            except Exception:
+                pass
+    return fig
+
 # ------------------------------------------------------------------
-# 1. CACHED LOADERS
+# 2. CACHED LOADERS
 # ------------------------------------------------------------------
 @st.cache_resource
 def load_models():
@@ -105,8 +212,7 @@ def load_weekly():
 
 @st.cache_data
 def batch_predict(df):
-    model = load_models()[0]
-    return np.expm1(model.predict(df[ALL_FEATURES].astype(float)))
+    return np.expm1(load_models()[0].predict(df[ALL_FEATURES].astype(float)))
 
 model, q10, q90 = load_models()
 explainer = load_explainer()
@@ -116,7 +222,6 @@ players["delta"] = players["predicted_fee"] - players["transfer_fee_adj"]
 weekly = load_weekly()
 
 def recompute_derived(d):
-    """Keep engineered features consistent after what-if edits."""
     d = d.copy()
     if "age_sq" in d.columns:
         d["age_sq"] = d["age_at_transfer"] ** 2
@@ -126,18 +231,26 @@ def recompute_derived(d):
         d["league_step"] = d["to_league_tier"] - d["from_league_tier"]
     return d
 
+# headline metrics for hero chips (best-effort)
+chip_r2 = chip_mae = ""
+try:
+    _m = pd.read_csv(MODELS / f"metrics_{WINDOW_DAYS}d.csv")
+    _xg = _m[_m["Model"].str.contains("XGBoost")].iloc[0]
+    chip_r2, chip_mae = f"R² {_xg['R2']:.3f}", f"MAE {eur(_xg['MAE'])}"
+except Exception:
+    pass
+
 # ------------------------------------------------------------------
-# 2. HERO
+# 3. HERO
 # ------------------------------------------------------------------
-st.markdown("""
-<style>
-.hero{padding:1.1rem 1.4rem;border-radius:14px;color:#fff;margin-bottom:1rem;
-background:linear-gradient(90deg,#0f2027,#203a43,#2c5364);}
-.hero h1{margin:0;font-size:1.8rem}.hero p{margin:.2rem 0 0;opacity:.85}
-</style>
+st.markdown(f"""
 <div class="hero"><h1>⚽ Transfer Value Lab</h1>
-<p>XGBoost · RoBERTa sentiment over 65M Reddit comments · StatsBomb xG · SHAP —
-COMP6830 Capstone | Shemar Burrowes</p></div>""", unsafe_allow_html=True)
+<p>What is a footballer worth — and how much of that is hype? XGBoost fee predictions
+explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M Reddit comments.</p>
+<div class="chips"><span>61.6M comments</span><span>Custom RoBERTa NLP</span>
+<span>StatsBomb xG</span><span>SHAP explainability</span>
+{f"<span>{chip_r2}</span>" if chip_r2 else ""}{f"<span>{chip_mae}</span>" if chip_mae else ""}</div>
+</div>""", unsafe_allow_html=True)
 
 tab1, tab2, tab3, tab4 = st.tabs(
     ["🎯 Player Lab", "🏆 Bargains & Overpays", "📈 Results & Windows", "🏗️ Architecture"])
@@ -156,7 +269,9 @@ with tab1:
     row = players.loc[players["_label"] == sel].iloc[0]
 
     # ---------------- What-if sidebar ----------------
-    st.sidebar.header("🎛️ What-if mode")
+    st.sidebar.header("🎛️ What-if lab")
+    st.sidebar.caption("Override features to run counterfactuals — derived fields "
+                       "(age², league step, coverage flags) recompute automatically.")
     edit = st.sidebar.toggle("Override features", value=False)
     ov = {}
     if edit:
@@ -202,205 +317,20 @@ with tab1:
     pi_lo = float(np.expm1(q10.predict(input_df)[0]))
     pi_hi = float(np.expm1(q90.predict(input_df)[0]))
     fee_actual = float(row["transfer_fee_adj"])
+    delta = fee_pred - fee_actual
 
     no_nlp = input_df.copy()
     no_nlp[[f for f in NLP_FEATURES if f in no_nlp.columns]] = 0.0
     reddit_fx = fee_pred - float(np.expm1(model.predict(no_nlp)[0]))
 
-    head_l, head_r = st.columns([1, 3])
-    with head_l:
-        if isinstance(row.get("image_url"), str) and row["image_url"].startswith("http"):
-            st.image(row["image_url"], width=130)
-        if isinstance(row.get("url"), str) and row["url"].startswith("http"):
-            st.link_button("Transfermarkt profile ↗", row["url"])
-    with head_r:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Predicted fee", eur(fee_pred))
-        c1.caption(f"80% interval: {eur(pi_lo)} – {eur(pi_hi)}")
-        c2.metric("Actual fee", eur(fee_actual))
-        delta = fee_pred - fee_actual
-        c3.metric("Model vs market", eur(abs(delta)),
-                  delta=("bargain for buyer" if delta > 0 else "premium paid"))
-        c4.metric("📱 Reddit effect",
-                  f"{'+' if reddit_fx >= 0 else '−'}{eur(abs(reddit_fx))}",
-                  help="Predicted fee with Reddit sentiment vs. all sentiment features zeroed.")
-    st.caption(f"{WINDOW_DAYS}-day feature window · fees in 2024 € · "
-               "values are log-space calibrated; typical error on the temporal test set is in Tab 3.")
-
-    st.markdown("---")
-    shap_l, shap_r = st.columns([3, 2])
-
-    exp = explainer(input_df)
-    exp.feature_names = DISPLAY_NAMES
-    base_val = float(np.atleast_1d(explainer.expected_value)[0])
-
-    with shap_l:
-        st.subheader(f"Why {row['player_name']} costs what he costs")
-        view = (st.segmented_control("SHAP view",
-                                     ["Waterfall", "Force (interactive)", "Grouped impact"],
-                                     default="Waterfall")
-                if hasattr(st, "segmented_control")
-                else st.radio("SHAP view",
-                              ["Waterfall", "Force (interactive)", "Grouped impact"],
-                              horizontal=True))
-        if view == "Waterfall":
-            shap.plots.waterfall(exp[0], max_display=12, show=False)
-            fig = plt.gcf(); fig.set_size_inches(9.5, 5)
-            st.pyplot(fig); plt.close("all")
-            st.caption("SHAP values are in log-fee space: red pushes the fee up, blue down.")
-        elif view == "Force (interactive)":
-            fp = shap.force_plot(base_val, exp.values[0],
-                                 pd.Series(exp.data[0], index=DISPLAY_NAMES),
-                                 matplotlib=False)
-            components.html(f"<head>{shap.getjs()}</head><body>{fp.html()}</body>",
-                            height=220, scrolling=True)
-        else:
-            sv = exp.values[0]
-            contrib = {g: float(sv[[ALL_FEATURES.index(f) for f in fs
-                                    if f in ALL_FEATURES]].sum())
-                       for g, fs in GROUPS.items()}
-            fig = go.Figure(go.Bar(
-                x=list(contrib.values()), y=list(contrib.keys()), orientation="h",
-                marker_color=["#2ecc71" if v >= 0 else "#e74c3c" for v in contrib.values()]))
-            fig.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10),
-                              xaxis_title="Contribution to log-fee")
-            st.plotly_chart(fig, use_container_width=True)
-
-    with shap_r:
-        st.subheader("📱 Reddit sentiment timeline")
-        if weekly is not None:
-            wk = weekly[weekly["player_id"] == int(row["player_id"])].sort_values("week")
-        else:
-            wk = pd.DataFrame()
-        if len(wk) > 0:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=wk["week"], y=wk["volume"], name="Comments",
-                                 marker_color="rgba(150,150,150,.3)", yaxis="y2"))
-            fig.add_trace(go.Scatter(x=wk["week"], y=wk["hype"], name="Hype",
-                                     line=dict(color="#f1c40f")))
-            fig.add_trace(go.Scatter(x=wk["week"], y=wk["perf_pos"], name="Praise",
-                                     line=dict(color="#2ecc71")))
-            fig.add_trace(go.Scatter(x=wk["week"], y=wk["perf_neg"], name="Criticism",
-                                     line=dict(color="#e74c3c")))
-            fig.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10),
-                              legend=dict(orientation="h"),
-                              yaxis=dict(title="Avg probability", range=[0, 1]),
-                              yaxis2=dict(overlaying="y", side="right",
-                                          showgrid=False, title="Volume"))
-            if pd.notna(row["transfer_date"]):
-                t = row["transfer_date"]
-                fig.add_vrect(x0=t - pd.Timedelta(days=WINDOW_DAYS), x1=t,
-                              fillcolor="blue", opacity=0.08, line_width=0)
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption(f"Shaded band = {WINDOW_DAYS}-day window before the transfer.")
-        else:
-            st.info("No Reddit activity found for this player.")
-
-# ==================================================================
-# TAB 2 — LEADERBOARD
-# ==================================================================
-with tab2:
-    st.subheader("🏆 Where the model disagrees with the market most")
-    st.caption("Predicted − Actual. Positive = model thinks the buying club got a bargain.")
-    show = ["player_name", "transfer_date", "transfer_fee_adj", "predicted_fee", "delta"]
-    fmt = {"transfer_fee_adj": "€{:,.0f}", "predicted_fee": "€{:,.0f}",
-           "delta": "€{:+,.0f}", "transfer_date": lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else "—"}
-    c1, c2 = st.columns(2)
-    c1.markdown("**💎 Biggest bargains (model > market)**")
-    c1.dataframe(players.nlargest(15, "delta")[show].style.format(fmt),
-                 use_container_width=True, hide_index=True)
-    c2.markdown("**💸 Biggest overpays (market > model)**")
-    c2.dataframe(players.nsmallest(15, "delta")[show].style.format(fmt),
-                 use_container_width=True, hide_index=True)
-
-# ==================================================================
-# TAB 3 — RESULTS & WINDOWS
-# ==================================================================
-with tab3:
-    st.subheader("Model comparison & temporal window sensitivity")
-
-    mfiles = sorted(MODELS.glob("metrics_*.csv"))
-    afiles = sorted(MODELS.glob("ablation_*.json"))
-    if mfiles:
-        metrics_all = pd.concat([pd.read_csv(f) for f in mfiles])
-        st.markdown("**All models × windows (R², log space)**")
-        st.dataframe(metrics_all.pivot_table(index="Model", columns="window_days",
-                                             values="R2").round(4),
-                     use_container_width=True)
-        xg_rows = metrics_all[metrics_all["Model"].str.contains("XGBoost")] \
-                      .sort_values("window_days")
-        try:
-            mae60 = metrics_all[(metrics_all["Model"].str.contains("XGBoost")) &
-                                (metrics_all["window_days"] == WINDOW_DAYS)]["MAE"].iloc[0]
-            st.caption(f"XGBoost (60d) typical error: ±{eur(mae60)} MAE on the temporal test set.")
-        except Exception:
-            pass
-    else:
-        xg_rows = None
-        st.warning("No metrics_*.csv found in models/.")
-
-    if afiles:
-        abl = pd.DataFrame([json.load(open(f)) for f in afiles]).sort_values("window_days")
-        abl["Δ R²"] = abl["r2_nlp"] - abl["r2_stats"]
-        abl["Δ RMSE (€M)"] = (abl["rmse_nlp"] - abl["rmse_stats"]) / 1e6
-        fig = go.Figure()
-        if xg_rows is not None:
-            fig.add_trace(go.Scatter(x=xg_rows["window_days"], y=xg_rows["R2"],
-                                     name="R² (Stats+NLP)", mode="lines+markers"))
-        fig.add_trace(go.Bar(x=abl["window_days"], y=abl["Δ R²"], name="NLP ΔR²",
-                             marker_color="#2ecc71", opacity=0.55, yaxis="y2"))
-        fig.update_layout(xaxis=dict(title="Window (days)", type="log"),
-                          yaxis=dict(title="R²"),
-                          yaxis2=dict(overlaying="y", side="right", showgrid=False),
-                          height=340, legend=dict(orientation="h"))
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(abl[["window_days", "r2_stats", "r2_nlp", "Δ R²",
-                          "Δ RMSE (€M)"]].round(4),
-                     use_container_width=True, hide_index=True)
-        st.info("Windows where NLP improves both R² and RMSE are the defensible ones; "
-                "Δ values of this size are reported with bootstrap confidence intervals "
-                "in the notebook.")
-
-    st.markdown("**Global SHAP summary**")
-    shap_imgs = sorted(MODELS.glob("shap_summary_*d.png"))
-    if shap_imgs:
-        choice = st.selectbox("Window", [p.stem.replace("shap_summary_", "")
-                                         for p in shap_imgs],
-                              index=[p.stem for p in shap_imgs].index(
-                                  f"shap_summary_{WINDOW_DAYS}d")
-                              if f"shap_summary_{WINDOW_DAYS}d" in
-                              [p.stem for p in shap_imgs] else 0)
-        st.image(str(MODELS / f"shap_summary_{choice}.png"),
-                 caption=f"Global feature importance ({choice} window)")
-    else:
-        st.warning("No shap_summary_*.png found in models/.")
-
-# ==================================================================
-# TAB 4 — ARCHITECTURE
-# ==================================================================
-with tab4:
-    st.markdown("""
-    1. **ETL (PySpark):** ~1–2TB of Reddit `.zst` archives → 61.6M-row English,
-       player-linked football corpus; 12.9GB StatsBomb JSON flattened (12.1M events).
-    2. **Entity resolution:** `rapidfuzz` fuzzy matching (≥90% after audit) + custom
-       dictionary NER (3,092 name variants incl. nicknames) linking comments to players.
-    3. **NLP:** Word2Vec/Doc2Vec trained from scratch; LLM (GLM) synthetic annotation
-       (3,539 clean rows); fine-tuned RoBERTa with class-weighted loss (Macro F1 = 0.51),
-       temperature-calibrated before aggregation.
-    4. **Massive inference:** FP16 GPU inference over 65M rows; softmax probabilities
-       aggregated per player per transfer window (volume, means, upvote-weighted means,
-       volatility, 14-day momentum).
-    5. **Regression:** XGBoost (early-stopped, monotonicity-constrained) predicting
-       inflation-adjusted fees (2024 €) with a temporal train/test split, lagged market
-       values, and quantile models for 80% prediction intervals. SHAP for global +
-       per-player explainability.
-    """)
-
-st.markdown("---")
-st.download_button(
-    "⬇️ Download current player analysis",
-    input_df.assign(player_name=row["player_name"], predicted_fee=fee_pred,
-                    pi_lo=pi_lo, pi_hi=pi_hi).to_csv(index=False),
-    file_name=f"analysis_{row['player_name'].replace(' ', '_')}.csv", mime="text/csv")
-st.caption("Predictions inflation-adjusted to 2024 € · Sentiment: custom RoBERTa over "
-           "65M Reddit comments · Built with Streamlit + SHAP + Plotly")
+    # ---------------- Player header card ----------------
+    img_url = row.get("image_url") if isinstance(row.get("image_url"), str) else ""
+    tm_url = row.get("url") if isinstance(row.get("url"), str) else ""
+    route = ""
+    if pd.notna(row.get("from_club_name")) and pd.notna(row.get("to_club_name")):
+        route = f"{row['from_club_name']} → {row['to_club_name']} · "
+    date_str = row["transfer_date"].strftime("%d %b %Y") if pd.notna(row["transfer_date"]) else "—"
+    yr = row["transfer_date"].year if pd.notna(row["transfer_date"]) else None
+    future_badge = ('<span class="badge future">🔮 out-of-time — never in training</span>'
+                    if isinstance(yr, int) and yr >= 2025 else "")
+    img_html =
