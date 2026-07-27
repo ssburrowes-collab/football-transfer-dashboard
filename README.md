@@ -1,4 +1,4 @@
-# ⚽ Transfer Value Lab
+#Transfer Value Lab
 XGBoost transfer-fee predictor explained with SHAP, powered by a custom RoBERTa
 sentiment pipeline over 61M Reddit comments. COMP6830 Capstone — Shemar Burrowes.
 

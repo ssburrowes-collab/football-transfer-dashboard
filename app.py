@@ -11,7 +11,6 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import shap
 import streamlit as st
-import streamlit.components.v1 as components
 import xgboost as xgb
 
 # ------------------------------------------------------------------
@@ -22,8 +21,8 @@ MODELS = ROOT / "models"
 DATA = ROOT / "data"
 WINDOW_DAYS = 60
 
-st.set_page_config(page_title="Transfer Value Lab", page_icon="⚽",
-                   layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Transfer Value Lab", layout="wide",
+                   initial_sidebar_state="expanded")
 
 pio.templates.default = "plotly_dark"
 
@@ -39,46 +38,48 @@ GRID = "rgba(148,163,184,0.10)"
 POS, NEG = "#34d399", "#f87171"
 HYPE, PRAISE, CRIT = "#f5b942", "#34d399", "#f87171"
 VIOLET = "#8b5cf6"
+ACCENT = "#2ecc71"
 
 st.markdown("""
 <style>
-/* ---------- hero ---------- */
-.hero{padding:1.3rem 1.6rem;border-radius:16px;color:#fff;margin-bottom:1.2rem;
-background:linear-gradient(115deg,#0b3d2e 0%,#0f2027 45%,#203a43 75%,#2c5364 100%);
-border:1px solid rgba(255,255,255,.08);}
-.hero h1{margin:0;font-size:1.9rem;letter-spacing:.01em}
-.hero p{margin:.3rem 0 .6rem;opacity:.85;font-size:.95rem}
-.chips span{display:inline-block;background:rgba(255,255,255,.09);
-border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:3px 12px;
-font-size:.75rem;margin:0 6px 6px 0;color:#dbe7f3}
+/* ---------- header ---------- */
+.hero{padding:1.35rem 1.6rem;border-radius:14px;color:#e6edf3;margin-bottom:1.2rem;
+background:#161b22;border:1px solid #232a35;border-left:4px solid #2ecc71;}
+.hero .overline{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+color:#2ecc71;font-weight:600}
+.hero h1{margin:.25rem 0;font-size:1.75rem;font-weight:700;color:#f1f5f9}
+.hero p{margin:.15rem 0 .7rem;color:#8b94a3;font-size:.92rem;max-width:60rem}
+.chips span{display:inline-block;background:#1f2733;border:1px solid #2c3542;
+border-radius:999px;padding:3px 12px;font-size:.74rem;margin:0 6px 6px 0;color:#aeb8c6}
 
 /* ---------- player header card ---------- */
 .player-card{display:flex;align-items:center;gap:18px;background:#161b22;
-border:1px solid #232a35;border-radius:16px;padding:16px 20px;margin-bottom:14px}
+border:1px solid #232a35;border-radius:14px;padding:16px 20px;margin-bottom:14px}
 .player-img{width:92px;height:92px;object-fit:cover;border-radius:12px;
 border:1px solid #2c3542;background:#0e1117}
 .player-avatar{width:92px;height:92px;border-radius:12px;background:#1f2733;
-display:flex;align-items:center;justify-content:center;font-size:2.2rem}
-.player-name{font-size:1.35rem;font-weight:700;color:#f1f5f9}
+border:1px solid #2c3542;display:flex;align-items:center;justify-content:center;
+font-size:1.7rem;font-weight:650;color:#8b94a3;letter-spacing:.04em}
+.player-name{font-size:1.3rem;font-weight:700;color:#f1f5f9}
 .player-meta{font-size:.85rem;color:#8b94a3;margin-top:2px}
-.badge{display:inline-block;background:#1f2733;border:1px solid #2c3542;
-border-radius:999px;padding:2px 10px;font-size:.72rem;color:#aeb8c6;margin:6px 8px 0 0}
-.badge.future{background:rgba(139,92,246,.14);border-color:rgba(139,92,246,.5);color:#c4b5fd}
+.badge{display:inline-block;background:rgba(139,92,246,.12);
+border:1px solid rgba(139,92,246,.45);border-radius:999px;padding:2px 10px;
+font-size:.72rem;color:#c4b5fd;margin:6px 8px 0 0}
 .tm-btn{margin-left:auto;text-decoration:none;background:#1f2733;color:#dbe7f3;
-border:1px solid #2c3542;border-radius:10px;padding:8px 14px;font-size:.8rem;white-space:nowrap}
+border:1px solid #2c3542;border-radius:10px;padding:8px 14px;font-size:.8rem;
+white-space:nowrap}
 .tm-btn:hover{background:#27313f;color:#fff}
 
 /* ---------- KPI cards ---------- */
 .kpi-grid{display:flex;gap:14px;margin-bottom:6px}
-.kpi-card{flex:1;background:#161b22;border:1px solid #232a35;border-radius:14px;
+.kpi-card{flex:1;background:#161b22;border:1px solid #232a35;border-radius:12px;
 padding:14px 18px;border-top:3px solid var(--accent,#2ecc71)}
 .kpi-title{font-size:.72rem;color:#8b94a3;text-transform:uppercase;letter-spacing:.07em}
-.kpi-value{font-size:1.65rem;font-weight:700;color:#f1f5f9;margin-top:3px}
+.kpi-value{font-size:1.6rem;font-weight:700;color:#f1f5f9;margin-top:3px}
 .kpi-sub{font-size:.78rem;color:#8b94a3;margin-top:2px}
 
 /* ---------- section polish ---------- */
-.section-h{font-size:1.15rem;font-weight:650;color:#e6edf3;margin:1.1rem 0 .4rem}
-.muted{color:#8b94a3;font-size:.82rem}
+.section-h{font-size:1.1rem;font-weight:650;color:#e6edf3;margin:1.1rem 0 .4rem}
 hr{border-color:#232a35}
 
 /* ---------- tabs ---------- */
@@ -131,17 +132,21 @@ FEATURE_LABELS = {
 DISPLAY_NAMES = [FEATURE_LABELS.get(f, f) for f in ALL_FEATURES]
 
 GROUPS = {
-    "💰 Financial": ["market_value_lagged_adj", "has_lagged_mv", "contract_years_remaining",
-                     "is_january_window", "buying_club_avg_spend"],
-    "⚽ Performance": ["goals_per_90", "assists_per_90", "sb_xg_per_90", "sb_xa_per_90",
-                       "total_minutes_window", "has_statsbomb"],
-    "🧬 Profile & League": ["age_at_transfer", "age_sq", "from_league_tier",
-                            "to_league_tier", "league_step"] + POSITION_COLS,
-    "📱 Reddit NLP": NLP_FEATURES,
+    "Financial": ["market_value_lagged_adj", "has_lagged_mv", "contract_years_remaining",
+                  "is_january_window", "buying_club_avg_spend"],
+    "Performance": ["goals_per_90", "assists_per_90", "sb_xg_per_90", "sb_xa_per_90",
+                    "total_minutes_window", "has_statsbomb"],
+    "Profile & League": ["age_at_transfer", "age_sq", "from_league_tier",
+                         "to_league_tier", "league_step"] + POSITION_COLS,
+    "Reddit NLP": NLP_FEATURES,
 }
 
 def eur(x):
     return f"€{x/1e6:,.1f}M" if abs(x) >= 1e6 else f"€{x/1e3:,.0f}k"
+
+def initials(name):
+    parts = [p for p in str(name).replace("-", " ").split() if p]
+    return "".join(p[0] for p in parts[:2]).upper() or "?"
 
 def style_dark(fig, height=None, legend_top=True):
     """Apply consistent dark styling to a Plotly figure."""
@@ -231,7 +236,10 @@ def recompute_derived(d):
         d["league_step"] = d["to_league_tier"] - d["from_league_tier"]
     return d
 
-# headline metrics for hero chips (best-effort)
+def pick(df, *cands):
+    return next((c for c in cands if c in df.columns), None)
+
+# headline metrics for header chips (best-effort)
 chip_r2 = chip_mae = ""
 try:
     _m = pd.read_csv(MODELS / f"metrics_{WINDOW_DAYS}d.csv")
@@ -241,19 +249,22 @@ except Exception:
     pass
 
 # ------------------------------------------------------------------
-# 3. HERO
+# 3. HEADER
 # ------------------------------------------------------------------
 st.markdown(f"""
-<div class="hero"><h1>⚽ Transfer Value Lab</h1>
-<p>What is a footballer worth — and how much of that is hype? XGBoost fee predictions
-explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M Reddit comments.</p>
-<div class="chips"><span>61.6M comments</span><span>Custom RoBERTa NLP</span>
-<span>StatsBomb xG</span><span>SHAP explainability</span>
-{f"<span>{chip_r2}</span>" if chip_r2 else ""}{f"<span>{chip_mae}</span>" if chip_mae else ""}</div>
+<div class="hero">
+  <div class="overline">Football transfer valuation</div>
+  <h1>Transfer Value Lab</h1>
+  <p>What is a footballer worth — and how much of that is hype? XGBoost fee predictions
+     explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M
+     Reddit comments.</p>
+  <div class="chips"><span>61.6M comments</span><span>Custom RoBERTa NLP</span>
+  <span>StatsBomb xG</span><span>SHAP explainability</span>
+  {f"<span>{chip_r2}</span>" if chip_r2 else ""}{f"<span>{chip_mae}</span>" if chip_mae else ""}</div>
 </div>""", unsafe_allow_html=True)
 
 tab1, tab2, tab3, tab4 = st.tabs(
-    ["🎯 Player Lab", "🏆 Bargains & Overpays", "📈 Results & Windows", "🏗️ Architecture"])
+    ["Player Lab", "Bargains & Overpays", "Results & Windows", "Architecture"])
 
 # ==================================================================
 # TAB 1 — PLAYER LAB
@@ -261,28 +272,30 @@ tab1, tab2, tab3, tab4 = st.tabs(
 with tab1:
     def make_label(r):
         yr = r["transfer_date"].year if pd.notna(r["transfer_date"]) else "?"
-        tag = " 🔮" if isinstance(yr, int) and yr >= 2025 else ""
+        tag = " · out-of-sample" if isinstance(yr, int) and yr >= 2025 else ""
         return f"{r['player_name']} ({yr}){tag} · #{r.name}"
     players["_label"] = players.apply(make_label, axis=1)
-    sel = st.selectbox("🔎 Search a player (🔮 = future transfer, never seen in training)",
-                       players["_label"].tolist())
+    sel = st.selectbox(
+        "Search a player — transfers from 2025 onward are out-of-sample and were never seen in training",
+        players["_label"].tolist())
     row = players.loc[players["_label"] == sel].iloc[0]
 
     # ---------------- What-if sidebar ----------------
-    st.sidebar.header("🎛️ What-if lab")
-    st.sidebar.caption("Override features to run counterfactuals — derived fields "
+    st.sidebar.header("What-if lab")
+    st.sidebar.caption("Override features to run counterfactuals. Derived fields "
                        "(age², league step, coverage flags) recompute automatically.")
     edit = st.sidebar.toggle("Override features", value=False)
     ov = {}
     if edit:
-        with st.sidebar.expander("📊 Bio & Financial", expanded=True):
-            ov["age_at_transfer"] = st.slider("Age", 16.0, 40.0,
-                                              float(row["age_at_transfer"]), 0.1)
+        with st.sidebar.expander("Bio & financials", expanded=True):
+            ov["age_at_transfer"] = st.slider(
+                "Age", 16.0, 40.0, float(np.clip(row["age_at_transfer"], 16, 40)), 0.1)
             ov["market_value_lagged_adj"] = st.number_input(
                 "Market value (€, pre-window)", 0, 250_000_000,
-                int(row["market_value_lagged_adj"]), 250_000)
+                int(np.clip(row["market_value_lagged_adj"], 0, 250_000_000)), 250_000)
             ov["contract_years_remaining"] = st.slider(
-                "Contract yrs left", 0.0, 6.0, float(row["contract_years_remaining"]), 0.25)
+                "Contract yrs left", 0.0, 6.0,
+                float(np.clip(row["contract_years_remaining"], 0, 6)), 0.25)
             ov["is_january_window"] = float(st.selectbox(
                 "Window", ["Summer", "January"],
                 index=int(row["is_january_window"])) == "January")
@@ -292,21 +305,23 @@ with tab1:
             new_pos = st.selectbox("Position", pos_opts, index=pos_opts.index(cur_pos))
             for c in POSITION_COLS:
                 ov[c] = float(c == f"position_{new_pos}")
-        with st.sidebar.expander("⚽ Performance (per 90)"):
+        with st.sidebar.expander("Performance (per 90)"):
             for c, lab in [("goals_per_90", "Goals/90"), ("assists_per_90", "Assists/90"),
                            ("sb_xg_per_90", "xG/90"), ("sb_xa_per_90", "xA/90")]:
                 if c in ALL_FEATURES:
-                    ov[c] = st.slider(lab, 0.0, 2.0, float(row[c]), 0.05)
-        with st.sidebar.expander("📱 Reddit sentiment"):
+                    ov[c] = st.slider(lab, 0.0, 2.0, float(np.clip(row[c], 0, 2)), 0.05)
+        with st.sidebar.expander("Reddit sentiment"):
             raw_vol = int(np.expm1(row["log_reddit_volume"]))
             new_vol = st.number_input("Comments in window", 0, 1_000_000, raw_vol, 100)
             ov["log_reddit_volume"] = float(np.log1p(new_vol))
             for c in ["avg_hype_prob", "avg_mkt_neg_prob", "avg_perf_pos_prob", "avg_perf_neg_prob"]:
                 if c in ALL_FEATURES:
-                    ov[c] = st.slider(FEATURE_LABELS[c], 0.0, 1.0, float(row[c]), 0.01)
+                    ov[c] = st.slider(FEATURE_LABELS[c], 0.0, 1.0,
+                                      float(np.clip(row[c], 0, 1)), 0.01)
             if "momentum_hype" in ALL_FEATURES:
-                ov["momentum_hype"] = st.slider("Hype momentum", -0.5, 0.5,
-                                                float(row["momentum_hype"]), 0.01)
+                ov["momentum_hype"] = st.slider(
+                    "Hype momentum", -0.5, 0.5,
+                    float(np.clip(row["momentum_hype"], -0.5, 0.5)), 0.01)
 
     input_df = pd.DataFrame([{**{f: float(row[f]) for f in ALL_FEATURES}, **ov}],
                             columns=ALL_FEATURES)
@@ -331,10 +346,11 @@ with tab1:
         route = f"{row['from_club_name']} → {row['to_club_name']} · "
     date_str = row["transfer_date"].strftime("%d %b %Y") if pd.notna(row["transfer_date"]) else "—"
     yr = row["transfer_date"].year if pd.notna(row["transfer_date"]) else None
-    future_badge = ('<span class="badge future">🔮 out-of-time — never in training</span>'
+    future_badge = ('<span class="badge">Out-of-sample — never in training</span>'
                     if isinstance(yr, int) and yr >= 2025 else "")
     img_html = (f'<img class="player-img" src="{img_url}" onerror="this.remove()">'
-                if img_url else '<div class="player-avatar">👤</div>')
+                if img_url else
+                f'<div class="player-avatar">{initials(row["player_name"])}</div>')
     tm_html = (f'<a class="tm-btn" href="{tm_url}" target="_blank">Transfermarkt profile ↗</a>'
                if tm_url else "")
     st.markdown(f"""
@@ -348,7 +364,8 @@ with tab1:
 
     # ---------------- KPI cards ----------------
     delta_color = POS if delta > 0 else NEG
-    delta_word = "model above market · potential bargain" if delta > 0 else "market above model · premium paid"
+    delta_word = ("model above market · potential bargain" if delta > 0
+                  else "market above model · premium paid")
     reddit_color = POS if reddit_fx > 0 else NEG
     st.markdown(f"""
     <div class="kpi-grid">
@@ -368,7 +385,7 @@ with tab1:
         <div class="kpi-sub">{delta_word}</div>
       </div>
       <div class="kpi-card" style="--accent:{VIOLET}">
-        <div class="kpi-title">📱 Reddit effect</div>
+        <div class="kpi-title">Reddit effect</div>
         <div class="kpi-value" style="color:{reddit_color}">{'+' if reddit_fx>0 else '−'}€{abs(reddit_fx)/1e6:.1f}M</div>
         <div class="kpi-sub">counterfactual: sentiment zeroed</div>
       </div>
@@ -377,136 +394,132 @@ with tab1:
     if edit:
         base_row = pd.DataFrame([{f: float(row[f]) for f in ALL_FEATURES}], columns=ALL_FEATURES)
         base_pred = float(np.expm1(model.predict(base_row)[0]))
-        st.caption(f"🎛️ What-if active — your overrides moved the prediction "
+        st.caption(f"What-if active — your overrides moved the prediction "
                    f"{'+' if fee_pred-base_pred>=0 else '−'}€{abs(fee_pred-base_pred)/1e6:.1f}M "
                    f"vs this player's real feature set.")
 
-    # ---------------- SHAP + timeline ----------------
-    left, right = st.columns([1.15, 1])
+    # ---------------- SHAP — full width ----------------
     sv = explainer.shap_values(input_df)[0]
     base = float(explainer.expected_value)
     total = base + float(np.sum(sv))
 
-    with left:
-        st.markdown('<div class="section-h">Why the model prices this transfer</div>',
-                    unsafe_allow_html=True)
-        view = st.segmented_control("SHAP view",
-                                    ["Grouped impact", "Waterfall", "Feature impacts"],
-                                    default="Grouped impact")
+    st.markdown('<div class="section-h">Why the model prices this transfer</div>',
+                unsafe_allow_html=True)
+    view = st.segmented_control("SHAP view",
+                                ["Grouped impact", "Waterfall", "Feature impacts"],
+                                default="Grouped impact")
 
-        if view == "Grouped impact":
-            gnames, gfees = [], []
-            for g, feats in GROUPS.items():
-                idx = [ALL_FEATURES.index(f) for f in feats if f in ALL_FEATURES]
-                if idx:
-                    contrib = float(np.sum(sv[idx]))
-                    gnames.append(g)
-                    gfees.append(float(np.expm1(total) - np.expm1(total - contrib)))
-            order = np.argsort(np.abs(gfees))
-            fig = go.Figure(go.Bar(
-                y=[gnames[i] for i in order], x=[gfees[i] for i in order], orientation="h",
-                marker_color=[POS if gfees[i] >= 0 else NEG for i in order],
-                text=[f"{'+' if gfees[i]>=0 else '−'}€{abs(gfees[i])/1e6:.1f}M "
-                      f"({gfees[i]/fee_pred*100:+.0f}%)" for i in order],
-                textposition="outside", hovertemplate="%{y}: %{text}<extra></extra>"))
-            style_dark(fig, height=300)
-            fig.update_layout(margin=dict(l=10, r=90, t=10, b=10))
-            fig.update_xaxes(title="Effect on predicted fee (€)")
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption("Feature families converted from log space to euros. "
-                       "Green raises the predicted fee, red lowers it.")
+    if view == "Grouped impact":
+        gnames, gfees = [], []
+        for g, feats in GROUPS.items():
+            idx = [ALL_FEATURES.index(f) for f in feats if f in ALL_FEATURES]
+            if idx:
+                contrib = float(np.sum(sv[idx]))
+                gnames.append(g)
+                gfees.append(float(np.expm1(total) - np.expm1(total - contrib)))
+        order = np.argsort(np.abs(gfees))
+        fig = go.Figure(go.Bar(
+            y=[gnames[i] for i in order], x=[gfees[i] for i in order], orientation="h",
+            marker_color=[POS if gfees[i] >= 0 else NEG for i in order],
+            text=[f"{'+' if gfees[i]>=0 else '−'}€{abs(gfees[i])/1e6:.1f}M "
+                  f"({gfees[i]/fee_pred*100:+.0f}%)" for i in order],
+            textposition="outside", hovertemplate="%{y}: %{text}<extra></extra>"))
+        style_dark(fig, height=260)
+        fig.update_layout(margin=dict(l=10, r=100, t=10, b=10))
+        fig.update_xaxes(title="Effect on predicted fee (€)")
+        st.plotly_chart(fig, width="stretch")
+        st.caption("Feature families converted from log space to euros. "
+                   "Green raises the predicted fee, red lowers it.")
 
-        elif view == "Waterfall":
-            exp = shap.Explanation(values=sv, base_values=base,
-                                   data=input_df.iloc[0].values, feature_names=DISPLAY_NAMES)
-            plt.figure(figsize=(9, 6.5))
-            shap.plots.waterfall(exp, max_display=14, show=False)
-            fig = restyle_mpl_dark(plt.gcf())
-            st.pyplot(fig)
-            plt.close(fig)
+    elif view == "Waterfall":
+        exp = shap.Explanation(values=sv, base_values=base,
+                               data=input_df.iloc[0].values, feature_names=DISPLAY_NAMES)
+        plt.figure(figsize=(13, 7))
+        shap.plots.waterfall(exp, max_display=14, show=False)
+        fig = restyle_mpl_dark(plt.gcf())
+        st.pyplot(fig, width="stretch")
+        plt.close(fig)
 
-        else:  # Feature impacts
-            n = min(14, len(sv))
-            order = np.argsort(np.abs(sv))[-n:]
-            vals = sv[order]
-            names = [DISPLAY_NAMES[i] for i in order]
-            eur_fx = [float(np.expm1(total) - np.expm1(total - v)) for v in vals]
-            fig = go.Figure(go.Bar(
-                y=names, x=vals, orientation="h",
-                marker_color=[POS if v >= 0 else NEG for v in vals],
-                text=[f"{'+' if e>=0 else '−'}€{abs(e)/1e6:.1f}M" for e in eur_fx],
-                textposition="outside",
-                hovertemplate="%{y}<br>SHAP %{x:+.3f} ≈ %{text}<extra></extra>"))
-            style_dark(fig, height=460)
-            fig.update_layout(margin=dict(l=10, r=70, t=10, b=10))
-            fig.update_xaxes(title="Contribution to log-fee (SHAP)")
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption("Top features by impact. Labels show each feature's approximate euro effect.")
+    else:  # Feature impacts
+        n = min(14, len(sv))
+        order = np.argsort(np.abs(sv))[-n:]
+        vals = sv[order]
+        names = [DISPLAY_NAMES[i] for i in order]
+        eur_fx = [float(np.expm1(total) - np.expm1(total - v)) for v in vals]
+        fig = go.Figure(go.Bar(
+            y=names, x=vals, orientation="h",
+            marker_color=[POS if v >= 0 else NEG for v in vals],
+            text=[f"{'+' if e>=0 else '−'}€{abs(e)/1e6:.1f}M" for e in eur_fx],
+            textposition="outside",
+            hovertemplate="%{y}<br>SHAP %{x:+.3f} ≈ %{text}<extra></extra>"))
+        style_dark(fig, height=480)
+        fig.update_layout(margin=dict(l=10, r=80, t=10, b=10))
+        fig.update_xaxes(title="Contribution to log-fee (SHAP)")
+        st.plotly_chart(fig, width="stretch")
+        st.caption("Top features by impact. Labels show each feature's approximate euro effect.")
 
-    with right:
-        st.markdown('<div class="section-h">📱 Reddit sentiment timeline</div>',
-                    unsafe_allow_html=True)
-        pid = int(row["player_id"])
-        tdate = row["transfer_date"]
+    st.markdown("<hr>", unsafe_allow_html=True)
 
-        def pick(df, *cands):
-            return next((c for c in cands if c in df.columns), None)
+    # ---------------- Timeline — full width ----------------
+    st.markdown('<div class="section-h">Reddit sentiment timeline</div>',
+                unsafe_allow_html=True)
+    pid = int(row["player_id"])
+    tdate = row["transfer_date"]
 
-        if weekly is None:
-            st.info("Weekly sentiment dataset not found in `data/`.")
+    if weekly is None:
+        st.info("Weekly sentiment dataset not found in `data/`.")
+    else:
+        pw = weekly[weekly["player_id"] == pid].sort_values("week")
+        if pw.empty:
+            st.info("No Reddit timeline for this player (outside demo set or zero comments).")
         else:
-            pw = weekly[weekly["player_id"] == pid].sort_values("week")
-            if pw.empty:
-                st.info("No Reddit timeline for this player (outside demo set or zero comments).")
-            else:
-                fig = go.Figure()
-                vol_col = pick(pw, "comment_count", "n_comments", "volume")
-                if vol_col:
-                    fig.add_trace(go.Bar(
-                        x=pw["week"], y=pw[vol_col], name="Comments",
-                        marker_color="rgba(148,163,184,0.28)", yaxis="y2",
-                        hovertemplate="%{x|%b %Y}: %{y} comments<extra></extra>"))
-                for cands, name, color in [
-                        (("avg_hype", "hype", "avg_hype_prob"), "Hype", HYPE),
-                        (("avg_praise", "praise", "avg_perf_pos_prob"), "Praise", PRAISE),
-                        (("avg_criticism", "criticism", "avg_perf_neg_prob"), "Criticism", CRIT)]:
-                    c = pick(pw, *cands)
-                    if c:
-                        fig.add_trace(go.Scatter(
-                            x=pw["week"], y=pw[c], name=name, mode="lines",
-                            line=dict(color=color, width=1.7),
-                            hovertemplate="%{x|%b %Y}: %{y:.2f}<extra>" + name + "</extra>"))
+            fig = go.Figure()
+            vol_col = pick(pw, "comment_count", "n_comments", "volume")
+            if vol_col:
+                fig.add_trace(go.Bar(
+                    x=pw["week"], y=pw[vol_col], name="Comments",
+                    marker_color="rgba(255,80,80,0.45)", yaxis="y2",
+                    hovertemplate="%{x|%b %Y}: %{y} comments<extra></extra>"))
+            for cands, name, color in [
+                    (("avg_hype", "hype", "avg_hype_prob"), "Hype", HYPE),
+                    (("avg_praise", "praise", "avg_perf_pos_prob"), "Praise", PRAISE),
+                    (("avg_criticism", "criticism", "avg_perf_neg_prob"), "Criticism", CRIT)]:
+                c = pick(pw, *cands)
+                if c:
+                    fig.add_trace(go.Scatter(
+                        x=pw["week"], y=pw[c], name=name, mode="lines",
+                        line=dict(color=color, width=2.2),
+                        hovertemplate="%{x|%b %Y}: %{y:.2f}<extra>" + name + "</extra>"))
 
-                # ---- THE WINDOW BAND — light violet fill, dashed border, explicit label ----
-                if pd.notna(tdate):
-                    w0 = tdate - pd.Timedelta(days=WINDOW_DAYS)
-                    fig.add_vrect(x0=w0, x1=tdate,
-                                  fillcolor="rgba(139,92,246,0.22)",
-                                  line=dict(color=VIOLET, width=1.5, dash="dash"),
-                                  layer="below")
-                    fig.add_vline(x=tdate, line=dict(color="#e6edf3", width=1, dash="dot"))
-                    fig.add_annotation(x=w0 + (tdate - w0) / 2, y=1.05, yref="paper",
-                                       text=f"{WINDOW_DAYS}-day pre-transfer window",
-                                       showarrow=False, font=dict(size=11, color="#c4b5fd"))
-                    fig.add_annotation(x=tdate, y=0.97, yref="paper", text="transfer day",
-                                       showarrow=False, xanchor="left", xshift=6,
-                                       font=dict(size=10, color="#e6edf3"))
-                    # guarantee the band is in view even if the transfer is at/after the data edge
-                    pad = pd.Timedelta(days=120)
-                    fig.update_xaxes(range=[min(pw["week"].min(), w0) - pad,
-                                            max(pw["week"].max(), tdate) + pad])
+            # ---- window band: light violet fill + dashed border + labels ----
+            if pd.notna(tdate):
+                w0 = tdate - pd.Timedelta(days=WINDOW_DAYS)
+                fig.add_vrect(x0=w0, x1=tdate,
+                              fillcolor="rgba(139,92,246,0.22)",
+                              line=dict(color=VIOLET, width=1.5, dash="dash"),
+                              layer="below")
+                fig.add_vline(x=tdate, line=dict(color="#e6edf3", width=1, dash="dot"))
+                fig.add_annotation(x=w0 + (tdate - w0) / 2, y=1.05, yref="paper",
+                                   text=f"{WINDOW_DAYS}-day pre-transfer window",
+                                   showarrow=False, font=dict(size=11, color="#c4b5fd"))
+                fig.add_annotation(x=tdate, y=0.97, yref="paper", text="transfer day",
+                                   showarrow=False, xanchor="left", xshift=6,
+                                   font=dict(size=10, color="#e6edf3"))
+                pad = pd.Timedelta(days=120)
+                fig.update_xaxes(range=[min(pw["week"].min(), w0) - pad,
+                                        max(pw["week"].max(), tdate) + pad])
 
-                fig.update_layout(
-                    barmode="overlay",
-                    yaxis=dict(title="Avg probability", range=[0, 1.05]),
-                    yaxis2=dict(title="Comments", overlaying="y", side="right",
-                                showgrid=False, rangemode="tozero"))
-                style_dark(fig, height=460)
-                st.plotly_chart(fig, use_container_width=True)
-                n_comments = int(np.expm1(row["log_reddit_volume"]))
-                st.caption(f"Shaded band = the {WINDOW_DAYS}-day window the model sees · "
-                           f"{n_comments:,} comments in this player's window · "
-                           "weekly RoBERTa class probabilities.")
+            fig.update_layout(
+                barmode="overlay",
+                yaxis=dict(title="Avg probability", range=[0, 1.05]),
+                yaxis2=dict(title="Comments", overlaying="y", side="right",
+                            showgrid=False, rangemode="tozero"))
+            style_dark(fig, height=440)
+            st.plotly_chart(fig, width="stretch")
+            n_comments = int(np.expm1(row["log_reddit_volume"]))
+            st.caption(f"Shaded band = the {WINDOW_DAYS}-day window the model sees · "
+                       f"{n_comments:,} comments in this player's window · "
+                       "weekly RoBERTa class probabilities.")
 
     # ---------------- export ----------------
     st.markdown("<hr>", unsafe_allow_html=True)
@@ -514,36 +527,41 @@ with tab1:
                         "value": input_df.iloc[0].values, "shap": sv})
     out["abs"] = out["shap"].abs()
     out = out.sort_values("abs", ascending=False).drop(columns="abs")
-    st.download_button("⬇️ Download current player analysis",
+    st.download_button("Download current player analysis (CSV)",
                        out.to_csv(index=False).encode(),
                        file_name=f"{row['player_name'].replace(' ', '_')}_shap.csv",
                        mime="text/csv")
 
 # ==================================================================
-# TAB 2 — LEADERBOARD
+# TAB 2 — BARGAINS & OVERPAYS
 # ==================================================================
 with tab2:
     st.markdown('<div class="section-h">Where the model disagrees with the market</div>',
                 unsafe_allow_html=True)
     st.caption("Gap = model prediction − actual fee. Positive = model rates the player "
                "above what was paid (potential bargain); negative = premium paid.")
-    lb = players[["player_name", "from_club_name", "to_club_name", "transfer_date",
-                  "transfer_fee_adj", "predicted_fee", "delta"]].copy()
+
+    has_from = "from_club_name" in players.columns
+    has_to = "to_club_name" in players.columns
+    if not (has_from and has_to):
+        st.caption("Club names aren't in the current demo CSV — re-export with "
+                   "`from_club_name` / `to_club_name` for richer labels.")
+
+    club_cols = (["from_club_name"] if has_from else []) + (["to_club_name"] if has_to else [])
+    lb = players[club_cols + ["player_name", "transfer_date",
+                              "transfer_fee_adj", "predicted_fee", "delta"]].copy()
     lb["year"] = lb["transfer_date"].dt.year
-    lb = lb.drop(columns="transfer_date").rename(columns={
-        "player_name": "Player", "from_club_name": "From", "to_club_name": "To",
-        "transfer_fee_adj": "Actual fee", "predicted_fee": "Model value", "delta": "Gap"})
+    lb = lb.drop(columns="transfer_date")
+    rename_map = {"player_name": "Player", "from_club_name": "From", "to_club_name": "To",
+                  "transfer_fee_adj": "Actual fee", "predicted_fee": "Model value", "delta": "Gap"}
+    lb = lb.rename(columns={k: v for k, v in rename_map.items() if k in lb.columns})
     fmt = {"Actual fee": lambda v: eur(v), "Model value": lambda v: eur(v),
            "Gap": lambda v: f"{'+' if v >= 0 else '−'}€{abs(v)/1e6:.1f}M"}
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**💎 Biggest bargains**")
-        st.dataframe(lb.nlargest(12, "Gap").style.format(fmt),
-                     use_container_width=True, hide_index=True)
-    with c2:
-        st.markdown("**💸 Biggest overpays**")
-        st.dataframe(lb.nsmallest(12, "Gap").style.format(fmt),
-                     use_container_width=True, hide_index=True)
+
+    st.markdown("**Biggest bargains**")
+    st.dataframe(lb.nlargest(12, "Gap").style.format(fmt), width="stretch", hide_index=True)
+    st.markdown("**Biggest overpays**")
+    st.dataframe(lb.nsmallest(12, "Gap").style.format(fmt), width="stretch", hide_index=True)
 
 # ==================================================================
 # TAB 3 — RESULTS & WINDOWS
@@ -561,7 +579,7 @@ with tab3:
         pick_m = st.radio("Metric", ["R2", "RMSLE", "MAE", "RMSE"], horizontal=True)
         piv = allm.pivot_table(index="Model", columns="window", values=pick_m)
         st.dataframe(piv.style.format("{:.3f}" if pick_m in ("R2", "RMSLE") else "{:,.0f}"),
-                     use_container_width=True)
+                     width="stretch")
     else:
         st.info("No metrics_*.csv files found in `models/`.")
 
@@ -578,7 +596,7 @@ with tab3:
         style_dark(fig, height=330)
         fig.update_xaxes(title="Pre-transfer window")
         fig.update_yaxes(title="Δ R² (Stats + NLP − Stats only)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         st.caption("Identical XGBoost configuration, same temporal split — the only difference "
                    "is the 16 Reddit features. Positive bars = sentiment improves out-of-sample fit.")
 
@@ -586,10 +604,9 @@ with tab3:
     if img.exists():
         st.markdown('<div class="section-h">Global feature importance (SHAP)</div>',
                     unsafe_allow_html=True)
-        # white card wrapper so the notebook-rendered PNG looks deliberate on the dark theme
         st.markdown('<div style="background:#fff;border-radius:12px;padding:10px">',
                     unsafe_allow_html=True)
-        st.image(str(img), use_container_width=True)
+        st.image(str(img), width="stretch")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ==================================================================
@@ -613,5 +630,5 @@ with tab4:
     """)
 
 st.markdown('<div class="footer">Predictions inflation-adjusted to 2024 € · Sentiment: custom '
-            'RoBERTa over 61.6M Reddit comments · Built with Streamlit + SHAP + Plotly · '
+            'RoBERTa over 61.6M Reddit comments · Built with Streamlit, SHAP and Plotly · '
             'COMP6830 Capstone — Shemar Burrowes</div>', unsafe_allow_html=True)
