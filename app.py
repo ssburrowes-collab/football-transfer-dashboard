@@ -327,7 +327,7 @@ with tab1:
                             columns=ALL_FEATURES)
     input_df = recompute_derived(input_df)
 
-    # ---------------- Predictions ----------------
+    # ---------------- Predictions (live inference) ----------------
     fee_pred = float(np.expm1(model.predict(input_df)[0]))
     pi_lo = float(np.expm1(q10.predict(input_df)[0]))
     pi_hi = float(np.expm1(q90.predict(input_df)[0]))
@@ -541,20 +541,12 @@ with tab2:
     st.caption("Gap = model prediction − actual fee. Positive = model rates the player "
                "above what was paid (potential bargain); negative = premium paid.")
 
-    has_from = "from_club_name" in players.columns
-    has_to = "to_club_name" in players.columns
-    if not (has_from and has_to):
-        st.caption("Club names aren't in the current demo CSV — re-export with "
-                   "`from_club_name` / `to_club_name` for richer labels.")
-
-    club_cols = (["from_club_name"] if has_from else []) + (["to_club_name"] if has_to else [])
-    lb = players[club_cols + ["player_name", "transfer_date",
-                              "transfer_fee_adj", "predicted_fee", "delta"]].copy()
+    lb = players[["player_name", "from_club_name", "to_club_name", "transfer_date",
+                  "transfer_fee_adj", "predicted_fee", "delta"]].copy()
     lb["year"] = lb["transfer_date"].dt.year
-    lb = lb.drop(columns="transfer_date")
-    rename_map = {"player_name": "Player", "from_club_name": "From", "to_club_name": "To",
-                  "transfer_fee_adj": "Actual fee", "predicted_fee": "Model value", "delta": "Gap"}
-    lb = lb.rename(columns={k: v for k, v in rename_map.items() if k in lb.columns})
+    lb = lb.drop(columns="transfer_date").rename(columns={
+        "player_name": "Player", "from_club_name": "From", "to_club_name": "To",
+        "transfer_fee_adj": "Actual fee", "predicted_fee": "Model value", "delta": "Gap"})
     fmt = {"Actual fee": lambda v: eur(v), "Model value": lambda v: eur(v),
            "Gap": lambda v: f"{'+' if v >= 0 else '−'}€{abs(v)/1e6:.1f}M"}
 
@@ -618,15 +610,17 @@ with tab4:
 1. **Data lake (PySpark)** — ~1–2 TB of raw Reddit archives filtered to **61.6M player-linked
    English comments**; Transfermarkt transfers, appearances & valuations; StatsBomb event data.
 2. **Custom NLP** — Word2Vec trained from scratch → LLM-annotated 4-class sentiment taxonomy
-   → fine-tuned **RoBERTa** → calibrated probabilities for all 61.6M comments.
+   → fine-tuned **RoBERTa** → Softmax probabilities for all 61.6M comments (Performance Positive,
+   Performance Negative, Market Hype, Market Negative).
 3. **Feature engineering** — 60-day pre-transfer windows: comment volume, upvote-weighted
    sentiment, volatility, 14-day momentum — plus structured performance & financial features.
    Only pre-transfer information is used (valuations lagged ≥180 days, contracts capped at the
    5-year regulatory maximum).
 4. **Modelling** — XGBoost with monotonicity constraints, strictly temporal train/test split,
    quantile models for 80% prediction intervals, SHAP for explanations.
-5. **This app** — everything here is served from pre-trained artifacts; no raw data or GPU
-   is needed at serving time.
+5. **This app** — serves the trained model artifacts directly. The demo CSV carries features
+   and metadata only; every prediction, interval, counterfactual and SHAP value you see is
+   computed live in the browser session.
     """)
 
 st.markdown('<div class="footer">Predictions inflation-adjusted to 2024 € · Sentiment: custom '
