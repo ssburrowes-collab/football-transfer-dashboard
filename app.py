@@ -198,7 +198,9 @@ def load_explainer():
 
 @st.cache_data
 def load_players():
-    df = pd.read_csv(DATA / f"demo_players_dataset_{WINDOW_DAYS}d.csv")
+    path = DATA / f"demo_players_dataset_{WINDOW_DAYS}d.csv"
+    df = pd.read_csv(path)
+    df.columns = df.columns.str.strip()          # kills stray-whitespace headers
     for c in ALL_FEATURES:
         if c not in df.columns:
             df[c] = 0.0
@@ -222,6 +224,17 @@ def batch_predict(df):
 model, q10, q90 = load_models()
 explainer = load_explainer()
 players = load_players()
+_missing = [c for c in ("from_club_name", "to_club_name") if c not in players.columns]
+if _missing:
+    _path = DATA / f"demo_players_dataset_{WINDOW_DAYS}d.csv"
+    st.error(
+        f"`{_path.name}` is missing columns: {_missing}.\n\n"
+        f"**File size on disk:** {_path.stat().st_size / 1e6:.1f} MB\n\n"
+        f"**First 10 columns the app actually sees:** "
+        f"`{list(players.columns)[:10]}`\n\n"
+        "The deployed CSV is an old version, the wrong file, or was mangled on upload."
+    )
+    st.stop()
 players["predicted_fee"] = batch_predict(players)
 players["delta"] = players["predicted_fee"] - players["transfer_fee_adj"]
 weekly = load_weekly()
