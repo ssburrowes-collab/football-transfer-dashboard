@@ -21,7 +21,7 @@ MODELS = ROOT / "models"
 DATA = ROOT / "data"
 WINDOW_DAYS = 60
 
-st.set_page_config(page_title="Transfer Value Lab", layout="wide",
+st.set_page_config(page_title="COMP6830 - Data Science Capstone Project Football Transfer Prediction Engine", layout="wide",
                    initial_sidebar_state="expanded")
 
 pio.templates.default = "plotly_dark"
@@ -267,7 +267,7 @@ except Exception:
 st.markdown(f"""
 <div class="hero">
   <div class="overline">Football transfer valuation</div>
-  <h1>Transfer Value Lab</h1>
+  <h1>COMP6830 - Data Science Capstone Project Football Transfer Prediction Engine</h1>
   <p>What is a footballer worth — and how much of that is hype? XGBoost fee predictions
      explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M
      Reddit comments.</p>
