@@ -19,7 +19,7 @@ DATA = ROOT / "data"
 WINDOW_DAYS = 60
 
 st.set_page_config(
-    page_title="Transfer Value Lab",
+    page_title="Football Transfer Fee Prediction Model",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -266,7 +266,7 @@ st.markdown(f"""
 <div class="hero">
   <div class="overline">Football transfer valuation & narrative pricing</div>
   <h1>Transfer Value Lab</h1>
-  <p>What is a footballer worth — and how much of that is hype? XGBoost fee predictions
+  <p>What is a footballer worth and how much of that is hype? XGBoost fee predictions
      explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M
      Reddit comments.</p>
   <div class="chips">
@@ -417,7 +417,7 @@ with tab1:
     st.markdown(f"""
     <div class="interval-note"><b>About the interval:</b> the range under
     <i>Predicted fee</i> is a nominal {NOMINAL_PCT}% prediction interval from quantile XGBoost models. 
-    Measured empirical coverage on the 2022+ test set: <b>{EMPIRICAL_TXT}</b> (reflecting post-2021 market regime drift).</div>
+    Measured empirical coverage on the 2022+ test set: <b>{EMPIRICAL_TXT}</b>.</div>
     """, unsafe_allow_html=True)
 
     if edit:
@@ -642,10 +642,10 @@ with tab4:
     st.markdown("""
 1. **Data lake (PySpark)** — ~1–2 TB of raw Reddit archives filtered to **61.6M player-linked
    English comments**; Transfermarkt transfers, appearances & valuations; StatsBomb event data.
-2. **Custom NLP** — Word2Vec trained from scratch → LLM-annotated 4-class sentiment taxonomy
-   → fine-tuned **RoBERTa** → probabilities for all 61.6M comments.
+2. **Custom NLP** — Word2Vec trained from scratch into a LLM-annotated 4-class sentiment taxonomy
+   into fine-tuned **RoBERTa** into probabilities for all 61.6M comments.
 3. **Feature engineering** — 60-day pre-transfer windows: comment volume, upvote-weighted
-   sentiment, volatility, 14-day momentum — plus structured performance & financial features.
+   sentiment, volatility, 14-day momentum plus structured performance & financial features.
    Only pre-transfer information is used (valuations lagged ≥180 days, contracts capped at the
    5-year regulatory maximum).
 4. **Modelling** — XGBoost with monotonicity constraints, strictly temporal train/test split,
@@ -653,8 +653,7 @@ with tab4:
    explanations.
 5. **This app** — serves the trained model artifacts directly. The demo CSV carries features
    and metadata only; every prediction, interval, counterfactual and SHAP value you see is
-   computed live in the browser session (single-row XGBoost inference is millisecond-scale
-   on CPU, so nothing needs to be precomputed).
+   computed live in the browser session.
     """)
 
 st.markdown('<div class="footer">Predictions inflation-adjusted to 2024 € · Sentiment: custom '
