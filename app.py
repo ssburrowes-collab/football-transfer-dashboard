@@ -265,9 +265,9 @@ except Exception:
 st.markdown(f"""
 <div class="hero">
   <div class="overline">Football transfer valuation & narrative pricing</div>
-  <h1>Transfer Value Lab</h1>
-  <p>What is a footballer worth and how much of that is hype? XGBoost fee predictions
-     explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M
+  <h1>Football Transfer Fee Prediction Model</h1>
+  <p>What is a footballer worth and how much of that is hype? 
+     XGBoost fee predictions explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M
      Reddit comments.</p>
   <div class="chips">
     <span>61.6M comments</span><span>Custom RoBERTa NLP</span>
