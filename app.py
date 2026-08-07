@@ -21,7 +21,7 @@ MODELS = ROOT / "models"
 DATA = ROOT / "data"
 WINDOW_DAYS = 60
 
-st.set_page_config(page_title="COMP6830 - Data Science Capstone Project Football Transfer Prediction Engine", layout="wide",
+st.set_page_config(page_title="Transfer Value Lab", layout="wide",
                    initial_sidebar_state="expanded")
 
 pio.templates.default = "plotly_dark"
@@ -33,7 +33,7 @@ plt.rcParams.update({
     "ytick.color": "#9aa4b2", "axes.edgecolor": "#39414d",
 })
 
-BG = "rgba(0,0,0,0)"          # transparent plot backgrounds
+BG = "rgba(0,0,0,0)"
 GRID = "rgba(148,163,184,0.10)"
 POS, NEG = "#34d399", "#f87171"
 HYPE, PRAISE, CRIT = "#f5b942", "#34d399", "#f87171"
@@ -42,7 +42,6 @@ ACCENT = "#2ecc71"
 
 st.markdown("""
 <style>
-/* ---------- header ---------- */
 .hero{padding:1.35rem 1.6rem;border-radius:14px;color:#e6edf3;margin-bottom:1.2rem;
 background:#161b22;border:1px solid #232a35;border-left:4px solid #2ecc71;}
 .hero .overline{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
@@ -52,7 +51,6 @@ color:#2ecc71;font-weight:600}
 .chips span{display:inline-block;background:#1f2733;border:1px solid #2c3542;
 border-radius:999px;padding:3px 12px;font-size:.74rem;margin:0 6px 6px 0;color:#aeb8c6}
 
-/* ---------- player header card ---------- */
 .player-card{display:flex;align-items:center;gap:18px;background:#161b22;
 border:1px solid #232a35;border-radius:14px;padding:16px 20px;margin-bottom:14px}
 .player-img{width:92px;height:92px;object-fit:cover;border-radius:12px;
@@ -70,7 +68,6 @@ border:1px solid #2c3542;border-radius:10px;padding:8px 14px;font-size:.8rem;
 white-space:nowrap}
 .tm-btn:hover{background:#27313f;color:#fff}
 
-/* ---------- KPI cards ---------- */
 .kpi-grid{display:flex;gap:14px;margin-bottom:6px}
 .kpi-card{flex:1;background:#161b22;border:1px solid #232a35;border-radius:12px;
 padding:14px 18px;border-top:3px solid var(--accent,#2ecc71)}
@@ -78,17 +75,17 @@ padding:14px 18px;border-top:3px solid var(--accent,#2ecc71)}
 .kpi-value{font-size:1.6rem;font-weight:700;color:#f1f5f9;margin-top:3px}
 .kpi-sub{font-size:.78rem;color:#8b94a3;margin-top:2px}
 
-/* ---------- section polish ---------- */
+.interval-note{background:rgba(245,185,66,.07);border:1px solid rgba(245,185,66,.25);
+border-radius:10px;padding:9px 14px;font-size:.78rem;color:#c9b98a;margin:6px 0 4px}
+
 .section-h{font-size:1.1rem;font-weight:650;color:#e6edf3;margin:1.1rem 0 .4rem}
 hr{border-color:#232a35}
 
-/* ---------- tabs ---------- */
 .stTabs [data-baseweb="tab-list"]{gap:6px}
 .stTabs [data-baseweb="tab"]{background:#161b22;border:1px solid #232a35;
 border-radius:10px 10px 0 0;padding:8px 18px}
 .stTabs [aria-selected="true"]{background:#1f2733;border-bottom:2px solid #2ecc71}
 
-/* ---------- footer ---------- */
 .footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid #232a35;
 color:#6b7484;font-size:.78rem;text-align:center}
 </style>
@@ -149,7 +146,6 @@ def initials(name):
     return "".join(p[0] for p in parts[:2]).upper() or "?"
 
 def style_dark(fig, height=None, legend_top=True):
-    """Apply consistent dark styling to a Plotly figure."""
     lay = dict(paper_bgcolor=BG, plot_bgcolor=BG, font=dict(color="#e6edf3"),
                margin=dict(l=10, r=10, t=36 if legend_top else 10, b=10),
                hovermode="x unified")
@@ -164,7 +160,6 @@ def style_dark(fig, height=None, legend_top=True):
     return fig
 
 def restyle_mpl_dark(fig):
-    """Recolor a matplotlib (SHAP) figure for the dark theme."""
     fig.patch.set_facecolor("#0e1117")
     for ax in fig.axes:
         ax.set_facecolor("#0e1117")
@@ -176,7 +171,7 @@ def restyle_mpl_dark(fig):
         for t in ax.texts:
             try:
                 r, g, b = mcolors.to_rgb(t.get_color())
-                if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.25:  # near-black → light
+                if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.25:
                     t.set_color("#e6edf3")
             except Exception:
                 pass
@@ -200,7 +195,7 @@ def load_explainer():
 def load_players():
     path = DATA / f"demo_players_dataset_{WINDOW_DAYS}d.csv"
     df = pd.read_csv(path)
-    df.columns = df.columns.str.strip()          # kills stray-whitespace headers
+    df.columns = df.columns.str.strip()
     for c in ALL_FEATURES:
         if c not in df.columns:
             df[c] = 0.0
@@ -218,26 +213,42 @@ def load_weekly():
     return wk
 
 @st.cache_data
+def load_interval_meta():
+    """Honest interval metadata. Falls back to the measured evaluation values;
+    export interval_meta_60d.json from the training notebook to override."""
+    p = MODELS / f"interval_meta_{WINDOW_DAYS}d.json"
+    if p.exists():
+        return json.load(open(p))
+    return {"nominal": 0.80, "empirical_coverage": 0.668,
+            "median_half_width_eur": None}
+
+@st.cache_data
 def batch_predict(df):
     return np.expm1(load_models()[0].predict(df[ALL_FEATURES].astype(float)))
 
 model, q10, q90 = load_models()
 explainer = load_explainer()
 players = load_players()
+weekly = load_weekly()
+INTERVAL_META = load_interval_meta()
+
 _missing = [c for c in ("from_club_name", "to_club_name") if c not in players.columns]
 if _missing:
     _path = DATA / f"demo_players_dataset_{WINDOW_DAYS}d.csv"
-    st.error(
-        f"`{_path.name}` is missing columns: {_missing}.\n\n"
-        f"**File size on disk:** {_path.stat().st_size / 1e6:.1f} MB\n\n"
-        f"**First 10 columns the app actually sees:** "
-        f"`{list(players.columns)[:10]}`\n\n"
-        "The deployed CSV is an old version, the wrong file, or was mangled on upload."
-    )
+    st.error(f"`{_path.name}` is missing columns: {_missing}. "
+             f"First columns seen: {list(players.columns)[:10]}. "
+             "The deployed CSV is an old version or was uploaded to the wrong folder.")
     st.stop()
+
 players["predicted_fee"] = batch_predict(players)
 players["delta"] = players["predicted_fee"] - players["transfer_fee_adj"]
-weekly = load_weekly()
+
+NOMINAL_PCT = int(round(INTERVAL_META.get("nominal", 0.80) * 100))
+EMPIRICAL = INTERVAL_META.get("empirical_coverage")
+EMPIRICAL_TXT = (f"{EMPIRICAL:.1%}" if isinstance(EMPIRICAL, (int, float)) else "not measured")
+
+def interval_subtitle():
+    return f"Nominal {NOMINAL_PCT}% interval · empirical coverage {EMPIRICAL_TXT} on 2022+ test set"
 
 def recompute_derived(d):
     d = d.copy()
@@ -252,7 +263,6 @@ def recompute_derived(d):
 def pick(df, *cands):
     return next((c for c in cands if c in df.columns), None)
 
-# headline metrics for header chips (best-effort)
 chip_r2 = chip_mae = ""
 try:
     _m = pd.read_csv(MODELS / f"metrics_{WINDOW_DAYS}d.csv")
@@ -267,7 +277,7 @@ except Exception:
 st.markdown(f"""
 <div class="hero">
   <div class="overline">Football transfer valuation</div>
-  <h1>COMP6830 - Data Science Capstone Project Football Transfer Prediction Engine</h1>
+  <h1>Transfer Value Lab</h1>
   <p>What is a footballer worth — and how much of that is hype? XGBoost fee predictions
      explained with SHAP, powered by a custom RoBERTa sentiment pipeline over 61.6M
      Reddit comments.</p>
@@ -385,7 +395,7 @@ with tab1:
       <div class="kpi-card" style="--accent:#2ecc71">
         <div class="kpi-title">Predicted fee</div>
         <div class="kpi-value">{eur(fee_pred)}</div>
-        <div class="kpi-sub">80% interval {eur(pi_lo)} – {eur(pi_hi)}</div>
+        <div class="kpi-sub">{eur(pi_lo)} – {eur(pi_hi)}</div>
       </div>
       <div class="kpi-card" style="--accent:#60a5fa">
         <div class="kpi-title">Actual fee</div>
@@ -403,6 +413,15 @@ with tab1:
         <div class="kpi-sub">counterfactual: sentiment zeroed</div>
       </div>
     </div>""", unsafe_allow_html=True)
+
+    # -------- honest interval disclosure --------
+    st.markdown(f"""
+    <div class="interval-note"><b>About the interval:</b> the range shown under
+    <i>Predicted fee</i> is a nominal {NOMINAL_PCT}% prediction interval from quantile
+    models. Measured on the 2022+ temporal test set it contained the true fee
+    <b>{EMPIRICAL_TXT}</b> of the time — below the nominal rate because the post-2021
+    market drifted from the training period. See <i>Results &amp; Windows</i> for detail.</div>
+    """, unsafe_allow_html=True)
 
     if edit:
         base_row = pd.DataFrame([{f: float(row[f]) for f in ALL_FEATURES}], columns=ALL_FEATURES)
@@ -504,7 +523,6 @@ with tab1:
                         line=dict(color=color, width=2.2),
                         hovertemplate="%{x|%b %Y}: %{y:.2f}<extra>" + name + "</extra>"))
 
-            # ---- window band: light violet fill + dashed border + labels ----
             if pd.notna(tdate):
                 w0 = tdate - pd.Timedelta(days=WINDOW_DAYS)
                 fig.add_vrect(x0=w0, x1=tdate,
@@ -603,7 +621,31 @@ with tab3:
         fig.update_yaxes(title="Δ R² (Stats + NLP − Stats only)")
         st.plotly_chart(fig, width="stretch")
         st.caption("Identical XGBoost configuration, same temporal split — the only difference "
-                   "is the 16 Reddit features. Positive bars = sentiment improves out-of-sample fit.")
+                   "is the 16 Reddit features. Positive bars = sentiment improves out-of-sample "
+                   "fit. The 365-day window is the one exception: sentiment that old is noise, "
+                   "which is how the 60-day production window was chosen.")
+
+    # -------- honest interval explainer --------
+    with st.expander("About the prediction intervals — read this before quoting them"):
+        st.markdown(f"""
+The intervals shown in the Player Lab are produced by quantile XGBoost models
+(α = 0.10 and 0.90), giving a **nominal {NOMINAL_PCT}% prediction interval**.
+
+**Measured coverage on the temporal test set (2022+ transfers): {EMPIRICAL_TXT}.**
+
+Why the shortfall? We investigated split-conformal calibration to close the gap:
+the conformal adjustment was negligible on in-distribution validation data, and
+calibration on a temporal holdout improved coverage only marginally. That
+diagnoses the cause as **distribution shift in the post-2021 transfer market**
+(post-COVID fee inflation and new spending regimes) rather than interval
+miscalibration. Conformal coverage guarantees rely on exchangeability, which a
+shifting market violates.
+
+We therefore display these as *nominal* intervals with their measured coverage
+attached, rather than relabelling them as calibrated guarantees. Uncertainty
+estimates are least reliable for transfers furthest from the training period —
+re-fitting the quantile models against a rolling recent window is future work.
+""")
 
     img = MODELS / f"shap_summary_{WINDOW_DAYS}d.png"
     if img.exists():
@@ -623,17 +665,18 @@ with tab4:
 1. **Data lake (PySpark)** — ~1–2 TB of raw Reddit archives filtered to **61.6M player-linked
    English comments**; Transfermarkt transfers, appearances & valuations; StatsBomb event data.
 2. **Custom NLP** — Word2Vec trained from scratch → LLM-annotated 4-class sentiment taxonomy
-   → fine-tuned **RoBERTa** → Softmax probabilities for all 61.6M comments (Performance Positive,
-   Performance Negative, Market Hype, Market Negative).
+   → fine-tuned **RoBERTa** → probabilities for all 61.6M comments.
 3. **Feature engineering** — 60-day pre-transfer windows: comment volume, upvote-weighted
    sentiment, volatility, 14-day momentum — plus structured performance & financial features.
    Only pre-transfer information is used (valuations lagged ≥180 days, contracts capped at the
    5-year regulatory maximum).
 4. **Modelling** — XGBoost with monotonicity constraints, strictly temporal train/test split,
-   quantile models for 80% prediction intervals, SHAP for explanations.
+   quantile models for prediction intervals (reported with measured coverage), SHAP for
+   explanations.
 5. **This app** — serves the trained model artifacts directly. The demo CSV carries features
    and metadata only; every prediction, interval, counterfactual and SHAP value you see is
-   computed live in the browser session.
+   computed live in the browser session (single-row XGBoost inference is millisecond-scale
+   on CPU, so nothing needs to be precomputed).
     """)
 
 st.markdown('<div class="footer">Predictions inflation-adjusted to 2024 € · Sentiment: custom '
