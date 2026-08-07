@@ -408,11 +408,17 @@ with tab1:
         <div class="kpi-sub">{delta_word}</div>
       </div>
       <div class="kpi-card" style="--accent:{VIOLET}">
-        <div class="kpi-title">Reddit effect</div>
+        <div class="kpi-title">Reddit sentiment impact</div>
         <div class="kpi-value" style="color:{reddit_color}">{'+' if reddit_fx>0 else '−'}€{abs(reddit_fx)/1e6:.1f}M</div>
-        <div class="kpi-sub">counterfactual: sentiment zeroed</div>
+        <div class="kpi-sub">change if all Reddit sentiment is removed</div>
       </div>
     </div>""", unsafe_allow_html=True)
+    reddit_dir = ("raises" if reddit_fx > 0 else "lowers")
+    st.caption(
+        f"Reddit sentiment impact: re-running the model with all 16 Reddit features removed "
+        f"{reddit_dir} this prediction by €{abs(reddit_fx)/1e6:.1f}M "
+        f"({eur(fee_pred)} with sentiment vs {eur(fee_pred - reddit_fx)} without)."
+    )
 
     # -------- honest interval disclosure --------
     st.markdown(f"""
